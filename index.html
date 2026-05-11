@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>S-201 Observation Rift - Input Mode</title>
+    <title>S-201 Observation Rift - Immersive Mode</title>
     <style>
         :root {
             --primary-color: #00ffcc;
@@ -15,10 +15,10 @@
             width: 100%; height: 100%;
             background-color: #000;
             overflow: hidden;
-            font-family: 'Courier New', Courier, monospace;
+            font-family: 'Consolas', 'Courier New', 'Microsoft JhengHei', monospace;
         }
 
-        /* CRT 濾鏡與掃描線 */
+        /* CRT 掃描線效果 */
         #screen-container {
             position: relative;
             width: 100vw; height: 100vh;
@@ -29,111 +29,101 @@
         #screen-container::after {
             content: " "; display: block; position: absolute;
             top: 0; left: 0; bottom: 0; right: 0;
-            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.15) 50%), 
-                        linear-gradient(90deg, rgba(255, 0, 0, 0.05), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.05));
-            background-size: 100% 3px, 2px 100%;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.2) 50%), 
+                        linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 255, 0, 0.03));
+            background-size: 100% 3px, 3px 100%;
             pointer-events: none; z-index: 100;
         }
 
-        /* 輸入介面樣式 */
+        /* 輸入介面 */
         #input-overlay {
             position: absolute;
             z-index: 50;
             text-align: center;
-            width: 80%;
-            max-width: 600px;
-            transition: opacity 1s ease, transform 1s ease;
+            width: 80%; max-width: 500px;
+            transition: all 1.5s ease;
         }
 
         .terminal-label {
             color: var(--primary-color);
-            font-size: 18px;
-            margin-bottom: 20px;
-            text-shadow: var(--glow);
-            letter-spacing: 2px;
+            font-size: 16px; margin-bottom: 25px;
+            text-shadow: var(--glow); letter-spacing: 3px;
         }
 
         input[type="text"] {
-            background: transparent;
-            border: 1px solid var(--primary-color);
-            color: var(--primary-color);
-            padding: 15px;
-            width: 100%;
-            font-size: 20px;
-            font-family: inherit;
-            outline: none;
-            box-shadow: inset var(--glow);
+            background: transparent; border: 1px solid var(--primary-color);
+            color: var(--primary-color); padding: 15px;
+            width: 100%; font-size: 18px; font-family: inherit;
+            outline: none; box-shadow: inset 0 0 10px rgba(0,255,204,0.2);
             text-align: center;
         }
 
         button {
-            margin-top: 30px;
-            background: var(--primary-color);
-            color: #000;
-            border: none;
-            padding: 10px 40px;
-            font-size: 16px;
-            font-weight: bold;
-            cursor: pointer;
-            letter-spacing: 4px;
-            transition: all 0.3s;
+            margin-top: 30px; background: transparent;
+            color: var(--primary-color); border: 1px solid var(--primary-color);
+            padding: 10px 40px; font-size: 14px; cursor: pointer;
+            letter-spacing: 5px; transition: all 0.3s;
         }
 
-        button:hover {
-            box-shadow: var(--glow);
-            transform: scale(1.05);
+        button:hover { background: var(--primary-color); color: #000; box-shadow: var(--glow); }
+
+        /* 60秒等待倒數 */
+        #sync-overlay {
+            position: absolute; z-index: 60;
+            color: var(--primary-color); text-align: center;
+            display: none;
         }
 
-        /* 觀測資訊樣式 */
+        .progress-container {
+            width: 300px; height: 2px;
+            background: rgba(0,255,204,0.1); margin: 20px auto;
+        }
+        #progress-bar { width: 0%; height: 100%; background: var(--primary-color); box-shadow: var(--glow); }
+
+        /* 觀測 UI */
         .ui-element {
-            position: absolute;
-            color: var(--primary-color);
-            font-size: 12px;
-            z-index: 20;
-            opacity: 0;
-            transition: opacity 1s;
-            pointer-events: none;
+            position: absolute; color: var(--primary-color);
+            font-size: 12px; z-index: 20; opacity: 0;
+            transition: opacity 2s; pointer-events: none; letter-spacing: 1px;
         }
+        .active-ui { opacity: 0.7; }
+        #coherence-panel { top: 30px; right: 30px; text-align: right; }
+        #system-log { top: 30px; left: 30px; line-height: 1.6; }
 
-        .active-ui { opacity: 0.8; }
+        canvas { display: block; filter: contrast(1.2) brightness(1.1); }
 
-        #coherence-panel { top: 20px; right: 20px; text-align: right; }
-        #system-log { top: 20px; left: 20px; }
-
-        canvas {
-            display: block;
-            filter: blur(0.4px);
-        }
-
-        /* 隱藏元素 */
-        .hidden {
-            opacity: 0 !important;
-            transform: scale(0.9);
-            pointer-events: none;
-        }
+        .hidden { opacity: 0 !important; pointer-events: none; transform: scale(0.95); }
     </style>
 </head>
 <body>
 
 <div id="screen-container">
-    <!-- 第一階段：輸入框 -->
+    <!-- 階段 1：輸入 -->
     <div id="input-overlay">
-        <div class="terminal-label">S-201 投射：請輸入欲觀測之可能性情境</div>
-        <input type="text" id="user-input" placeholder="例如：若當年沒有選擇離開..." autocomplete="off">
+        <div class="terminal-label">S-201 投射：輸入欲追蹤之意識路徑</div>
+        <input type="text" id="user-input" placeholder="..." autocomplete="off">
         <br>
-        <button onclick="startEntanglement()">確定觀測</button>
+        <button onclick="startSync()">啟動觀測儀式</button>
     </div>
 
-    <!-- 第二階段：觀測 UI -->
+    <!-- 階段 2：等待 1 分鐘 -->
+    <div id="sync-overlay">
+        <div class="terminal-label" id="sync-status">正在計算次維度相干性...</div>
+        <div class="progress-container"><div id="progress-bar"></div></div>
+        <div id="timer-display" style="font-size: 12px; opacity: 0.6;">00:60</div>
+    </div>
+
+    <!-- 階段 3：觀測介面 -->
     <div id="system-log" class="ui-element">
-        MODE: QUANTUM OBSERVATION<br>
-        PATH: UNIVERSE_REMNANT_#7721<br>
-        STATUS: <span id="status-text">WAITING...</span>
+        TERMINAL: S-201 // OBSERVATION RIFT<br>
+        DATA_STREAM: ACTIVE<br>
+        ENCRYPTION: QUANTUM_FLUX<br>
+        <span id="status-text">IDLE</span>
     </div>
 
     <div id="coherence-panel" class="ui-element">
-        COHERENCE LEVEL
-        <div style="width:150px; height:4px; background:#111; margin-top:5px;">
+        COHERENCE<br>
+        <div style="width:120px; height:2px; background:rgba(0,255,204,0.1); margin: 5px 0;">
             <div id="coherence-bar" style="width:0%; height:100%; background:var(--primary-color);"></div>
         </div>
         <span id="coherence-pct">0.00%</span>
@@ -141,8 +131,8 @@
 
     <canvas id="observationCanvas"></canvas>
 
-    <div id="instruction" class="ui-element" style="bottom: 30px; width:100%; text-align:center;">
-        [ 持續按壓螢幕以凝聚波函數 ]
+    <div id="instruction" class="ui-element" style="bottom: 40px; width:100%; text-align:center; letter-spacing: 4px;">
+        [ 長按螢幕以固定坍縮態 ]
     </div>
 </div>
 
@@ -151,9 +141,9 @@
     const ctx = canvas.getContext('2d');
     let width, height, particles = [];
     let isObserving = false;
-    let isSystemReady = false;
+    let isReadyToObserve = false;
     let coherence = 0;
-    let targetText = "";
+    let targetMsg = "";
 
     function resize() {
         width = window.innerWidth;
@@ -164,7 +154,6 @@
     window.addEventListener('resize', resize);
     resize();
 
-    // 粒子類別
     class Particle {
         constructor() {
             this.init();
@@ -173,14 +162,16 @@
             this.x = Math.random() * width;
             this.y = Math.random() * height;
             this.tx = this.x; this.ty = this.y;
-            this.vx = (Math.random() - 0.5) * 1.5;
-            this.vy = (Math.random() - 0.5) * 1.5;
-            this.size = Math.random() * 2;
+            // 速度變慢，增加黏滯感
+            this.vx = (Math.random() - 0.5) * 0.8;
+            this.vy = (Math.random() - 0.5) * 0.8;
+            this.size = Math.random() * 1.5 + 0.5;
         }
         update() {
-            if (isObserving && isSystemReady) {
-                this.x += (this.tx - this.x) * 0.07;
-                this.y += (this.ty - this.y) * 0.07;
+            if (isObserving && isReadyToObserve) {
+                // 凝聚過程變慢但更精確 (lerp factor 降低)
+                this.x += (this.tx - this.x) * 0.04;
+                this.y += (this.ty - this.y) * 0.04;
             } else {
                 this.x += this.vx;
                 this.y += this.vy;
@@ -189,74 +180,117 @@
             }
         }
         draw() {
-            ctx.fillStyle = `rgba(0, 255, 204, ${isObserving ? 0.8 : 0.3})`;
+            // 觀測時亮度增加
+            const alpha = isObserving ? 0.9 : 0.2;
+            ctx.fillStyle = `rgba(0, 255, 204, ${alpha})`;
             ctx.fillRect(this.x, this.y, this.size, this.size);
         }
     }
 
-    // 初始化粒子
-    for (let i = 0; i < 2000; i++) particles.push(new Particle());
+    // 增加粒子數量以提高文字清晰度
+    for (let i = 0; i < 4000; i++) particles.push(new Particle());
 
-    // 第一階段到第二階段的轉場
-    function startEntanglement() {
-        const inputVal = document.getElementById('user-input').value;
-        if (!inputVal) return;
+    function startSync() {
+        const input = document.getElementById('user-input').value;
+        if (!input) return;
 
-        // 模擬系統對輸入內容的回饋
-        targetText = `[觀測中]: ${inputVal} ... 那端的茉莉花開了。`;
-
-        // UI 切換
+        targetMsg = `「${input}」已在 7721-B 宇宙發生。窗口的茉莉花開了。`;
+        
         document.getElementById('input-overlay').classList.add('hidden');
         
+        // 進入 60 秒倒數
         setTimeout(() => {
-            document.querySelectorAll('.ui-element').forEach(el => el.classList.add('active-ui'));
-            document.getElementById('status-text').innerText = "ENTANGLING...";
-            prepareText(targetText);
-            isSystemReady = true;
+            document.getElementById('sync-overlay').style.display = 'block';
+            let timeLeft = 60;
+            const timerInterval = setInterval(() => {
+                timeLeft--;
+                const progress = ((60 - timeLeft) / 60) * 100;
+                document.getElementById('progress-bar').style.width = progress + '%';
+                document.getElementById('timer-display').innerText = `00:${timeLeft < 10 ? '0' + timeLeft : timeLeft}`;
+                
+                // 隨機切換掃描狀態字樣
+                const statuses = ["正在校準機率幅...", "搜索次維度特徵...", "鎖定反事實殘影...", "量子去相干補償中..."];
+                if (timeLeft % 5 === 0) {
+                    document.getElementById('sync-status').innerText = statuses[Math.floor(Math.random()*statuses.length)];
+                }
+
+                if (timeLeft <= 0) {
+                    clearInterval(timerInterval);
+                    enterObservationMode();
+                }
+            }, 1000);
         }, 1000);
     }
 
+    function enterObservationMode() {
+        document.getElementById('sync-overlay').classList.add('hidden');
+        prepareText(targetMsg);
+        
+        setTimeout(() => {
+            document.querySelectorAll('.ui-element').forEach(el => el.classList.add('active-ui'));
+            isReadyToObserve = true;
+            document.getElementById('status-text').innerText = "SYNCHRONIZED";
+        }, 1500);
+    }
+
     function prepareText(msg) {
+        // 在隱藏的緩衝區畫圖以獲取更高精度的點
         ctx.clearRect(0,0,width,height);
-        ctx.fillStyle = "#fff";
-        ctx.font = "24px 'Microsoft JhengHei', sans-serif";
+        ctx.fillStyle = "white";
+        // 增加字體大小並使用更重一點的粗細
+        ctx.font = "bold 26px 'Microsoft JhengHei', sans-serif";
         ctx.textAlign = "center";
         
-        // 簡單斷句處理
-        const x = width / 2;
-        const y = height / 2;
-        ctx.fillText(msg, x, y);
+        // 簡單的文字換行邏輯
+        const words = msg.split('');
+        let line = '';
+        let y = height / 2 - 20;
+        for(let n = 0; n < words.length; n++) {
+            line += words[n];
+            if (line.length > 15) {
+                ctx.fillText(line, width/2, y);
+                line = '';
+                y += 40;
+            }
+        }
+        ctx.fillText(line, width/2, y);
 
         const imageData = ctx.getImageData(0, 0, width, height).data;
         let points = [];
-        for (let i = 0; i < height; i += 4) {
-            for (let j = 0; j < width; j += 4) {
+        // 縮小採樣間距 (從 4 降到 2 或 3) 提高清晰度
+        for (let i = 0; i < height; i += 3) {
+            for (let j = 0; j < width; j += 3) {
                 if (imageData[(i * width + j) * 4] > 128) {
                     points.push({x: j, y: i});
                 }
             }
         }
 
+        // 打亂點的順序讓凝聚效果更自然
+        points.sort(() => Math.random() - 0.5);
+
         particles.forEach((p, idx) => {
             if (idx < points.length) {
                 p.tx = points[idx].x;
                 p.ty = points[idx].y;
             } else {
-                p.tx = Math.random() * width;
-                p.ty = Math.random() * height;
+                // 多餘粒子隨機分佈在文字周圍形成光暈
+                p.tx = width/2 + (Math.random()-0.5)*400;
+                p.ty = height/2 + (Math.random()-0.5)*200;
             }
         });
     }
 
     function animate() {
-        ctx.fillStyle = 'rgba(5, 10, 10, 0.2)';
+        // 增加殘影效果
+        ctx.fillStyle = 'rgba(5, 10, 10, 0.15)';
         ctx.fillRect(0, 0, width, height);
 
-        if (isObserving && isSystemReady) {
-            coherence = Math.min(coherence + 0.4, 42.15 + Math.random());
+        if (isObserving && isReadyToObserve) {
+            coherence = Math.min(coherence + 0.2, 42.15 + Math.random() * 0.5);
             document.getElementById('status-text').innerText = "COLLAPSING...";
-        } else if (isSystemReady) {
-            coherence = Math.max(coherence - 1.5, 0);
+        } else if (isReadyToObserve) {
+            coherence = Math.max(coherence - 1, 0);
             document.getElementById('status-text').innerText = "STABLE NOISE";
         }
 
@@ -271,8 +305,7 @@
         requestAnimationFrame(animate);
     }
 
-    // 監聽互動
-    const startObs = () => { if(isSystemReady) isObserving = true; };
+    const startObs = () => { if(isReadyToObserve) isObserving = true; };
     const endObs = () => isObserving = false;
 
     window.addEventListener('mousedown', startObs);
