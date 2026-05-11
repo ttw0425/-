@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>S-201 Observation Rift Interface</title>
+    <style>
+        :root {
+            --primary-color: #00ffcc;
+            --bg-color: #050a0a;
+            --glow: 0 0 10px rgba(0, 255, 204, 0.5);
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #000;
+            overflow: hidden;
+            font-family: 'Courier New', Courier, monospace;
+        }
+
+        /* 螢幕外框 */
+        #screen-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            background: var(--bg-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+
+        /* CRT 掃描線效果 */
+        #screen-container::after {
+            content: " ";
+            display: block;
+            position: absolute;
+            top: 0; left: 0; bottom: 0; right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), 
+                        linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            background-size: 100% 4px, 3px 100%;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        /* 螢幕閃爍動畫 */
+        @keyframes flicker {
+            0% { opacity: 0.97; }
+            5% { opacity: 0.95; }
+            10% { opacity: 0.9; }
+            15% { opacity: 0.95; }
+            50% { opacity: 0.96; }
+            100% { opacity: 0.98; }
+        }
+        
+        #canvas-wrapper {
+            animation: flicker 0.1s infinite;
+        }
+
+        canvas {
+            display: block;
+            filter: blur(0.5px);
+        }
+
+        /* UI 文字標籤 */
+        .overlay {
+            position: absolute;
+            color: var(--primary-color);
+            text-shadow: var(--glow);
+            text-transform: uppercase;
+            font-size: 12px;
+            pointer-events: none;
+            letter-spacing: 2px;
+        }
+
+        .top-left { top: 20px; left: 20px; }
+        .top-right { top: 20px; right: 20px; text-align: right; }
+        .bottom-info { bottom: 20px; width: 100%; text-align: center; opacity: 0.6; }
+
+        .status-bar {
+            width: 150px;
+            height: 4px;
+            background: #111;
+            margin-top: 5px;
+            position: relative;
+        }
+
+        #coherence-fill {
+            width: 0%;
+            height: 100%;
+            background: var(--primary-color);
+            box-shadow: var(--glow);
+            transition: width 0.2s ease;
+        }
+
+        .warning {
+            color: #ff3300;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+<div id="screen-container">
+    <div class="overlay top-left">
+        S-201 SYSTEM BOOT... OK<br>
+        TARGET: #7721-B <br>
+        <span id="coords">COORD: 44.21.08</span>
+    </div>
+
+    <div class="overlay top-right">
+        COHERENCE LEVEL
+        <div class="status-bar"><div id="coherence-fill"></div></div>
+        <span id="coherence-val">0.00%</span>
+        <div id="warning-msg" class="warning">DECOHERENCE DETECTED</div>
+    </div>
+
+    <div id="canvas-wrapper">
+        <canvas id="observationCanvas"></canvas>
+    </div>
+
+    <div class="overlay bottom-info">
+        [ 長按螢幕以進行意識觀測 ]
+    </div>
+</div>
+
+<script>
+    const canvas = document.getElementById('observationCanvas');
+    const ctx = canvas.getContext('2d');
+    const coherenceFill = document.getElementById('coherence-fill');
+    const coherenceVal = document.getElementById('coherence-val');
+    const warningMsg = document.getElementById('warning-msg');
+
+    let width, height, particles = [];
+    let isObserving = false;
+    let coherence = 0;
+    
+    // 觀測到的訊息文字
+    const secretMessage = "窗口的茉莉花開了，孩子問我，外面的世界長什麼樣。";
+    let textPoints = [];
+
+    class Particle {
+        constructor() {
+            this.init();
+        }
+
+        init() {
+            this.x = Math.random() * width;
+            this.y = Math.random() * height;
+            this.targetX = this.x;
+            this.targetY = this.y;
+            this.vx = (Math.random() - 0.5) * 2;
+            this.vy = (Math.random() - 0.5) * 2;
+            this.size = Math.random() * 2;
+            this.alpha = Math.random() * 0.5 + 0.2;
+        }
+
+        update() {
+            if (isObserving && this.hasTarget) {
+                // 移向目標文字位置
+                let dx = this.targetX - this.x;
+                let dy = this.targetY - this.y;
+                this.x += dx * 0.05;
+                this.y += dy * 0.05;
+                this.alpha = 0.8;
+            } else {
+                // 隨機漂浮（疊加態）
+                this.x += this.vx;
+                this.y += this.vy;
+                this.alpha = Math.random() * 0.4;
+
+                if (this.x < 0 || this.x > width) this.vx *= -1;
+                if (this.y < 0 || this.y > height) this.vy *= -1;
+            }
+        }
+
+        draw() {
+            ctx.fillStyle = `rgba(0, 255, 204, ${this.alpha})`;
+            ctx.fillRect(this.x, this.y, this.size, this.size);
+        }
+    }
+
+    function init() {
+        resize();
+        for (let i = 0; i < 1500; i++) {
+            particles.push(new Particle());
+        }
+        prepareText();
+        animate();
+    }
+
+    function resize() {
+        width = window.innerWidth;
+        height = window.innerHeight;
+        canvas.width = width;
+        canvas.height = height;
+    }
+
+    // 將文字轉換成座標點
+    function prepareText() {
+        ctx.fillStyle = "#fff";
+        ctx.font = "30px 'Microsoft JhengHei', sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText(secretMessage, width / 2, height / 2);
+
+        const imageData = ctx.getImageData(0, 0, width, height).data;
+        textPoints = [];
+        for (let y = 0; y < height; y += 4) {
+            for (let x = 0; x < width; x += 4) {
+                if (imageData[(y * width + x) * 4] > 128) {
+                    textPoints.push({ x, y });
+                }
+            }
+        }
+        ctx.clearRect(0, 0, width, height);
+
+        // 分配粒子到文字點
+        particles.forEach((p, i) => {
+            if (i < textPoints.length) {
+                p.targetX = textPoints[i].x;
+                p.targetY = textPoints[i].y;
+                p.hasTarget = true;
+            } else {
+                p.hasTarget = false;
+            }
+        });
+    }
+
+    function animate() {
+        ctx.fillStyle = 'rgba(5, 10, 10, 0.2)'; // 殘影效果
+        ctx.fillRect(0, 0, width, height);
+
+        if (isObserving) {
+            coherence = Math.min(coherence + 0.5, 42.5 + Math.random() * 5);
+            warningMsg.style.display = 'none';
+        } else {
+            coherence = Math.max(coherence - 2, 0);
+            if (coherence > 0) warningMsg.style.display = 'block';
+            else warningMsg.style.display = 'none';
+        }
+
+        coherenceFill.style.width = coherence + '%';
+        coherenceVal.innerText = coherence.toFixed(2) + '%';
+
+        particles.forEach(p => {
+            p.update();
+            p.draw();
+        });
+
+        // 隨機座標跳動
+        if (Math.random() > 0.95) {
+            document.getElementById('coords').innerText = `COORD: ${Math.floor(Math.random()*99)}.${Math.floor(Math.random()*99)}.${Math.floor(Math.random()*99)}`;
+        }
+
+        requestAnimationFrame(animate);
+    }
+
+    // 互動監聽
+    const startObs = () => isObserving = true;
+    const endObs = () => isObserving = false;
+
+    window.addEventListener('mousedown', startObs);
+    window.addEventListener('mouseup', endObs);
+    window.addEventListener('touchstart', (e) => { e.preventDefault(); startObs(); });
+    window.addEventListener('touchend', endObs);
+    window.addEventListener('resize', resize);
+
+    init();
+</script>
+</body>
+</html>
