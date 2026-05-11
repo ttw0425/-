@@ -2,194 +2,158 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>S-201 Observation Rift Interface</title>
+    <title>S-201 Observation Rift - Input Mode</title>
     <style>
         :root {
             --primary-color: #00ffcc;
             --bg-color: #050a0a;
-            --glow: 0 0 10px rgba(0, 255, 204, 0.5);
+            --glow: 0 0 15px rgba(0, 255, 204, 0.4);
         }
 
         body, html {
-            margin: 0;
-            padding: 0;
-            width: 100%;
-            height: 100%;
+            margin: 0; padding: 0;
+            width: 100%; height: 100%;
             background-color: #000;
             overflow: hidden;
             font-family: 'Courier New', Courier, monospace;
         }
 
-        /* 螢幕外框 */
+        /* CRT 濾鏡與掃描線 */
         #screen-container {
             position: relative;
-            width: 100vw;
-            height: 100vh;
+            width: 100vw; height: 100vh;
             background: var(--bg-color);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            overflow: hidden;
+            display: flex; justify-content: center; align-items: center;
         }
 
-        /* CRT 掃描線效果 */
         #screen-container::after {
-            content: " ";
-            display: block;
-            position: absolute;
+            content: " "; display: block; position: absolute;
             top: 0; left: 0; bottom: 0; right: 0;
-            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), 
-                        linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
-            background-size: 100% 4px, 3px 100%;
-            pointer-events: none;
-            z-index: 10;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.15) 50%), 
+                        linear-gradient(90deg, rgba(255, 0, 0, 0.05), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.05));
+            background-size: 100% 3px, 2px 100%;
+            pointer-events: none; z-index: 100;
         }
 
-        /* 螢幕閃爍動畫 */
-        @keyframes flicker {
-            0% { opacity: 0.97; }
-            5% { opacity: 0.95; }
-            10% { opacity: 0.9; }
-            15% { opacity: 0.95; }
-            50% { opacity: 0.96; }
-            100% { opacity: 0.98; }
-        }
-        
-        #canvas-wrapper {
-            animation: flicker 0.1s infinite;
-        }
-
-        canvas {
-            display: block;
-            filter: blur(0.5px);
-        }
-
-        /* UI 文字標籤 */
-        .overlay {
+        /* 輸入介面樣式 */
+        #input-overlay {
             position: absolute;
+            z-index: 50;
+            text-align: center;
+            width: 80%;
+            max-width: 600px;
+            transition: opacity 1s ease, transform 1s ease;
+        }
+
+        .terminal-label {
             color: var(--primary-color);
+            font-size: 18px;
+            margin-bottom: 20px;
             text-shadow: var(--glow);
-            text-transform: uppercase;
-            font-size: 12px;
-            pointer-events: none;
             letter-spacing: 2px;
         }
 
-        .top-left { top: 20px; left: 20px; }
-        .top-right { top: 20px; right: 20px; text-align: right; }
-        .bottom-info { bottom: 20px; width: 100%; text-align: center; opacity: 0.6; }
-
-        .status-bar {
-            width: 150px;
-            height: 4px;
-            background: #111;
-            margin-top: 5px;
-            position: relative;
+        input[type="text"] {
+            background: transparent;
+            border: 1px solid var(--primary-color);
+            color: var(--primary-color);
+            padding: 15px;
+            width: 100%;
+            font-size: 20px;
+            font-family: inherit;
+            outline: none;
+            box-shadow: inset var(--glow);
+            text-align: center;
         }
 
-        #coherence-fill {
-            width: 0%;
-            height: 100%;
+        button {
+            margin-top: 30px;
             background: var(--primary-color);
-            box-shadow: var(--glow);
-            transition: width 0.2s ease;
+            color: #000;
+            border: none;
+            padding: 10px 40px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            letter-spacing: 4px;
+            transition: all 0.3s;
         }
 
-        .warning {
-            color: #ff3300;
-            display: none;
+        button:hover {
+            box-shadow: var(--glow);
+            transform: scale(1.05);
+        }
+
+        /* 觀測資訊樣式 */
+        .ui-element {
+            position: absolute;
+            color: var(--primary-color);
+            font-size: 12px;
+            z-index: 20;
+            opacity: 0;
+            transition: opacity 1s;
+            pointer-events: none;
+        }
+
+        .active-ui { opacity: 0.8; }
+
+        #coherence-panel { top: 20px; right: 20px; text-align: right; }
+        #system-log { top: 20px; left: 20px; }
+
+        canvas {
+            display: block;
+            filter: blur(0.4px);
+        }
+
+        /* 隱藏元素 */
+        .hidden {
+            opacity: 0 !important;
+            transform: scale(0.9);
+            pointer-events: none;
         }
     </style>
 </head>
 <body>
 
 <div id="screen-container">
-    <div class="overlay top-left">
-        S-201 SYSTEM BOOT... OK<br>
-        TARGET: #7721-B <br>
-        <span id="coords">COORD: 44.21.08</span>
+    <!-- 第一階段：輸入框 -->
+    <div id="input-overlay">
+        <div class="terminal-label">S-201 投射：請輸入欲觀測之可能性情境</div>
+        <input type="text" id="user-input" placeholder="例如：若當年沒有選擇離開..." autocomplete="off">
+        <br>
+        <button onclick="startEntanglement()">確定觀測</button>
     </div>
 
-    <div class="overlay top-right">
+    <!-- 第二階段：觀測 UI -->
+    <div id="system-log" class="ui-element">
+        MODE: QUANTUM OBSERVATION<br>
+        PATH: UNIVERSE_REMNANT_#7721<br>
+        STATUS: <span id="status-text">WAITING...</span>
+    </div>
+
+    <div id="coherence-panel" class="ui-element">
         COHERENCE LEVEL
-        <div class="status-bar"><div id="coherence-fill"></div></div>
-        <span id="coherence-val">0.00%</span>
-        <div id="warning-msg" class="warning">DECOHERENCE DETECTED</div>
+        <div style="width:150px; height:4px; background:#111; margin-top:5px;">
+            <div id="coherence-bar" style="width:0%; height:100%; background:var(--primary-color);"></div>
+        </div>
+        <span id="coherence-pct">0.00%</span>
     </div>
 
-    <div id="canvas-wrapper">
-        <canvas id="observationCanvas"></canvas>
-    </div>
+    <canvas id="observationCanvas"></canvas>
 
-    <div class="overlay bottom-info">
-        [ 長按螢幕以進行意識觀測 ]
+    <div id="instruction" class="ui-element" style="bottom: 30px; width:100%; text-align:center;">
+        [ 持續按壓螢幕以凝聚波函數 ]
     </div>
 </div>
 
 <script>
     const canvas = document.getElementById('observationCanvas');
     const ctx = canvas.getContext('2d');
-    const coherenceFill = document.getElementById('coherence-fill');
-    const coherenceVal = document.getElementById('coherence-val');
-    const warningMsg = document.getElementById('warning-msg');
-
     let width, height, particles = [];
     let isObserving = false;
+    let isSystemReady = false;
     let coherence = 0;
-    
-    // 觀測到的訊息文字
-    const secretMessage = "窗口的茉莉花開了，孩子問我，外面的世界長什麼樣。";
-    let textPoints = [];
-
-    class Particle {
-        constructor() {
-            this.init();
-        }
-
-        init() {
-            this.x = Math.random() * width;
-            this.y = Math.random() * height;
-            this.targetX = this.x;
-            this.targetY = this.y;
-            this.vx = (Math.random() - 0.5) * 2;
-            this.vy = (Math.random() - 0.5) * 2;
-            this.size = Math.random() * 2;
-            this.alpha = Math.random() * 0.5 + 0.2;
-        }
-
-        update() {
-            if (isObserving && this.hasTarget) {
-                // 移向目標文字位置
-                let dx = this.targetX - this.x;
-                let dy = this.targetY - this.y;
-                this.x += dx * 0.05;
-                this.y += dy * 0.05;
-                this.alpha = 0.8;
-            } else {
-                // 隨機漂浮（疊加態）
-                this.x += this.vx;
-                this.y += this.vy;
-                this.alpha = Math.random() * 0.4;
-
-                if (this.x < 0 || this.x > width) this.vx *= -1;
-                if (this.y < 0 || this.y > height) this.vy *= -1;
-            }
-        }
-
-        draw() {
-            ctx.fillStyle = `rgba(0, 255, 204, ${this.alpha})`;
-            ctx.fillRect(this.x, this.y, this.size, this.size);
-        }
-    }
-
-    function init() {
-        resize();
-        for (let i = 0; i < 1500; i++) {
-            particles.push(new Particle());
-        }
-        prepareText();
-        animate();
-    }
+    let targetText = "";
 
     function resize() {
         width = window.innerWidth;
@@ -197,77 +161,127 @@
         canvas.width = width;
         canvas.height = height;
     }
+    window.addEventListener('resize', resize);
+    resize();
 
-    // 將文字轉換成座標點
-    function prepareText() {
+    // 粒子類別
+    class Particle {
+        constructor() {
+            this.init();
+        }
+        init() {
+            this.x = Math.random() * width;
+            this.y = Math.random() * height;
+            this.tx = this.x; this.ty = this.y;
+            this.vx = (Math.random() - 0.5) * 1.5;
+            this.vy = (Math.random() - 0.5) * 1.5;
+            this.size = Math.random() * 2;
+        }
+        update() {
+            if (isObserving && isSystemReady) {
+                this.x += (this.tx - this.x) * 0.07;
+                this.y += (this.ty - this.y) * 0.07;
+            } else {
+                this.x += this.vx;
+                this.y += this.vy;
+                if (this.x < 0 || this.x > width) this.vx *= -1;
+                if (this.y < 0 || this.y > height) this.vy *= -1;
+            }
+        }
+        draw() {
+            ctx.fillStyle = `rgba(0, 255, 204, ${isObserving ? 0.8 : 0.3})`;
+            ctx.fillRect(this.x, this.y, this.size, this.size);
+        }
+    }
+
+    // 初始化粒子
+    for (let i = 0; i < 2000; i++) particles.push(new Particle());
+
+    // 第一階段到第二階段的轉場
+    function startEntanglement() {
+        const inputVal = document.getElementById('user-input').value;
+        if (!inputVal) return;
+
+        // 模擬系統對輸入內容的回饋
+        targetText = `[觀測中]: ${inputVal} ... 那端的茉莉花開了。`;
+
+        // UI 切換
+        document.getElementById('input-overlay').classList.add('hidden');
+        
+        setTimeout(() => {
+            document.querySelectorAll('.ui-element').forEach(el => el.classList.add('active-ui'));
+            document.getElementById('status-text').innerText = "ENTANGLING...";
+            prepareText(targetText);
+            isSystemReady = true;
+        }, 1000);
+    }
+
+    function prepareText(msg) {
+        ctx.clearRect(0,0,width,height);
         ctx.fillStyle = "#fff";
-        ctx.font = "30px 'Microsoft JhengHei', sans-serif";
+        ctx.font = "24px 'Microsoft JhengHei', sans-serif";
         ctx.textAlign = "center";
-        ctx.fillText(secretMessage, width / 2, height / 2);
+        
+        // 簡單斷句處理
+        const x = width / 2;
+        const y = height / 2;
+        ctx.fillText(msg, x, y);
 
         const imageData = ctx.getImageData(0, 0, width, height).data;
-        textPoints = [];
-        for (let y = 0; y < height; y += 4) {
-            for (let x = 0; x < width; x += 4) {
-                if (imageData[(y * width + x) * 4] > 128) {
-                    textPoints.push({ x, y });
+        let points = [];
+        for (let i = 0; i < height; i += 4) {
+            for (let j = 0; j < width; j += 4) {
+                if (imageData[(i * width + j) * 4] > 128) {
+                    points.push({x: j, y: i});
                 }
             }
         }
-        ctx.clearRect(0, 0, width, height);
 
-        // 分配粒子到文字點
-        particles.forEach((p, i) => {
-            if (i < textPoints.length) {
-                p.targetX = textPoints[i].x;
-                p.targetY = textPoints[i].y;
-                p.hasTarget = true;
+        particles.forEach((p, idx) => {
+            if (idx < points.length) {
+                p.tx = points[idx].x;
+                p.ty = points[idx].y;
             } else {
-                p.hasTarget = false;
+                p.tx = Math.random() * width;
+                p.ty = Math.random() * height;
             }
         });
     }
 
     function animate() {
-        ctx.fillStyle = 'rgba(5, 10, 10, 0.2)'; // 殘影效果
+        ctx.fillStyle = 'rgba(5, 10, 10, 0.2)';
         ctx.fillRect(0, 0, width, height);
 
-        if (isObserving) {
-            coherence = Math.min(coherence + 0.5, 42.5 + Math.random() * 5);
-            warningMsg.style.display = 'none';
-        } else {
-            coherence = Math.max(coherence - 2, 0);
-            if (coherence > 0) warningMsg.style.display = 'block';
-            else warningMsg.style.display = 'none';
+        if (isObserving && isSystemReady) {
+            coherence = Math.min(coherence + 0.4, 42.15 + Math.random());
+            document.getElementById('status-text').innerText = "COLLAPSING...";
+        } else if (isSystemReady) {
+            coherence = Math.max(coherence - 1.5, 0);
+            document.getElementById('status-text').innerText = "STABLE NOISE";
         }
 
-        coherenceFill.style.width = coherence + '%';
-        coherenceVal.innerText = coherence.toFixed(2) + '%';
+        document.getElementById('coherence-bar').style.width = coherence + "%";
+        document.getElementById('coherence-pct').innerText = coherence.toFixed(2) + "%";
 
         particles.forEach(p => {
             p.update();
             p.draw();
         });
 
-        // 隨機座標跳動
-        if (Math.random() > 0.95) {
-            document.getElementById('coords').innerText = `COORD: ${Math.floor(Math.random()*99)}.${Math.floor(Math.random()*99)}.${Math.floor(Math.random()*99)}`;
-        }
-
         requestAnimationFrame(animate);
     }
 
-    // 互動監聽
-    const startObs = () => isObserving = true;
+    // 監聽互動
+    const startObs = () => { if(isSystemReady) isObserving = true; };
     const endObs = () => isObserving = false;
 
     window.addEventListener('mousedown', startObs);
     window.addEventListener('mouseup', endObs);
     window.addEventListener('touchstart', (e) => { e.preventDefault(); startObs(); });
     window.addEventListener('touchend', endObs);
-    window.addEventListener('resize', resize);
 
-    init();
+    animate();
 </script>
+
 </body>
 </html>
