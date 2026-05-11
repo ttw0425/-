@@ -1,320 +1,690 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-    <meta charset="UTF-8">
-    <title>S-201 Observation Rift - Immersive Mode</title>
-    <style>
-        :root {
-            --primary-color: #00ffcc;
-            --bg-color: #050a0a;
-            --glow: 0 0 15px rgba(0, 255, 204, 0.4);
-        }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>S-201 觀測裂縫 — 時空觀測處</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Noto+Sans+TC:wght@300;400&display=swap');
 
-        body, html {
-            margin: 0; padding: 0;
-            width: 100%; height: 100%;
-            background-color: #000;
-            overflow: hidden;
-            font-family: 'Consolas', 'Courier New', 'Microsoft JhengHei', monospace;
-        }
+:root {
+  --c: #00e5b0;
+  --c2: #00a57a;
+  --c-dim: rgba(0,229,176,0.15);
+  --c-mid: rgba(0,229,176,0.4);
+  --bg: #030808;
+  --bg2: #050d0d;
+  --scan: rgba(0,229,176,0.03);
+  --red: #ff4444;
+  --amber: #ffaa00;
+}
 
-        /* CRT 掃描線效果 */
-        #screen-container {
-            position: relative;
-            width: 100vw; height: 100vh;
-            background: var(--bg-color);
-            display: flex; justify-content: center; align-items: center;
-        }
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-        #screen-container::after {
-            content: " "; display: block; position: absolute;
-            top: 0; left: 0; bottom: 0; right: 0;
-            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.2) 50%), 
-                        linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 255, 0, 0.03));
-            background-size: 100% 3px, 3px 100%;
-            pointer-events: none; z-index: 100;
-        }
+body, html {
+  width: 100%; height: 100%;
+  background: var(--bg);
+  overflow: hidden;
+  font-family: 'Share Tech Mono', 'Noto Sans TC', monospace;
+  color: var(--c);
+  cursor: crosshair;
+  user-select: none;
+}
 
-        /* 輸入介面 */
-        #input-overlay {
-            position: absolute;
-            z-index: 50;
-            text-align: center;
-            width: 80%; max-width: 500px;
-            transition: all 1.5s ease;
-        }
+/* ─── SCANLINE + VIGNETTE ─── */
+#fx {
+  position: fixed; inset: 0; pointer-events: none; z-index: 999;
+  background:
+    repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.08) 2px, rgba(0,0,0,0.08) 4px),
+    radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.7) 100%);
+}
 
-        .terminal-label {
-            color: var(--primary-color);
-            font-size: 16px; margin-bottom: 25px;
-            text-shadow: var(--glow); letter-spacing: 3px;
-        }
+/* ─── FLICKER ─── */
+@keyframes flicker {
+  0%,100%{opacity:1} 92%{opacity:1} 93%{opacity:0.85} 94%{opacity:1} 96%{opacity:0.9} 97%{opacity:1}
+}
+#screen { animation: flicker 8s infinite; width:100vw; height:100vh; position:relative; }
 
-        input[type="text"] {
-            background: transparent; border: 1px solid var(--primary-color);
-            color: var(--primary-color); padding: 15px;
-            width: 100%; font-size: 18px; font-family: inherit;
-            outline: none; box-shadow: inset 0 0 10px rgba(0,255,204,0.2);
-            text-align: center;
-        }
+/* ─── CANVAS ─── */
+canvas { position:fixed; inset:0; display:block; }
 
-        button {
-            margin-top: 30px; background: transparent;
-            color: var(--primary-color); border: 1px solid var(--primary-color);
-            padding: 10px 40px; font-size: 14px; cursor: pointer;
-            letter-spacing: 5px; transition: all 0.3s;
-        }
+/* ─── PHASE PANELS ─── */
+.phase {
+  position: fixed; inset: 0;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  transition: opacity 1.2s ease, transform 1.2s ease;
+}
+.phase.hidden { opacity:0; pointer-events:none; transform: scale(0.97); }
 
-        button:hover { background: var(--primary-color); color: #000; box-shadow: var(--glow); }
+/* ─── PHASE 1: INPUT ─── */
+#phase-input { z-index: 50; }
 
-        /* 60秒等待倒數 */
-        #sync-overlay {
-            position: absolute; z-index: 60;
-            color: var(--primary-color); text-align: center;
-            display: none;
-        }
+.terminal-header {
+  font-size: 11px; letter-spacing: 4px; opacity: 0.5;
+  margin-bottom: 60px; text-align: center; line-height: 2;
+}
 
-        .progress-container {
-            width: 300px; height: 2px;
-            background: rgba(0,255,204,0.1); margin: 20px auto;
-        }
-        #progress-bar { width: 0%; height: 100%; background: var(--primary-color); box-shadow: var(--glow); }
+.terminal-header span { display: block; }
 
-        /* 觀測 UI */
-        .ui-element {
-            position: absolute; color: var(--primary-color);
-            font-size: 12px; z-index: 20; opacity: 0;
-            transition: opacity 2s; pointer-events: none; letter-spacing: 1px;
-        }
-        .active-ui { opacity: 0.7; }
-        #coherence-panel { top: 30px; right: 30px; text-align: right; }
-        #system-log { top: 30px; left: 30px; line-height: 1.6; }
+.typewriter {
+  overflow: hidden; white-space: nowrap;
+  animation: type 1.5s steps(30,end) both;
+}
+@keyframes type { from{width:0} to{width:100%} }
 
-        canvas { display: block; filter: contrast(1.2) brightness(1.1); }
+.input-wrap {
+  width: min(480px, 90vw);
+  border: 1px solid var(--c-mid);
+  padding: 2px;
+  position: relative;
+}
+.input-wrap::before, .input-wrap::after {
+  content:'';
+  position:absolute;
+  width:8px; height:8px;
+  border-color: var(--c);
+  border-style: solid;
+}
+.input-wrap::before { top:-1px; left:-1px; border-width:1px 0 0 1px; }
+.input-wrap::after  { bottom:-1px; right:-1px; border-width:0 1px 1px 0; }
 
-        .hidden { opacity: 0 !important; pointer-events: none; transform: scale(0.95); }
-    </style>
+.input-label {
+  font-size: 10px; letter-spacing: 3px;
+  padding: 10px 16px 6px;
+  opacity: 0.5;
+  border-bottom: 1px solid var(--c-dim);
+}
+
+#user-input {
+  width: 100%; background: transparent;
+  border: none; outline: none;
+  color: var(--c); font-family: inherit;
+  font-size: 15px; padding: 18px 16px;
+  caret-color: var(--c);
+}
+#user-input::placeholder { color: var(--c2); opacity: 0.4; }
+
+.hint { font-size: 10px; opacity: 0.3; letter-spacing: 2px; text-align:center; margin-top:14px; }
+
+.btn-start {
+  margin-top: 40px;
+  background: transparent;
+  border: 1px solid var(--c);
+  color: var(--c); font-family: inherit;
+  font-size: 11px; letter-spacing: 6px;
+  padding: 14px 50px; cursor: pointer;
+  position: relative; overflow: hidden;
+  transition: all 0.3s;
+}
+.btn-start::after {
+  content:'';
+  position:absolute; inset:0;
+  background: var(--c);
+  transform: translateX(-101%);
+  transition: transform 0.3s ease;
+  z-index: -1;
+}
+.btn-start:hover { color: var(--bg); }
+.btn-start:hover::after { transform: translateX(0); }
+
+/* ─── PHASE 2: SYNC ─── */
+#phase-sync { z-index: 50; text-align: center; }
+
+.sync-title {
+  font-size: 10px; letter-spacing: 4px; opacity: 0.6;
+  margin-bottom: 30px;
+}
+
+#sync-msg {
+  font-size: 13px; letter-spacing: 2px;
+  min-height: 20px; margin-bottom: 30px;
+  animation: pulse 2s ease-in-out infinite;
+}
+@keyframes pulse { 0%,100%{opacity:0.7} 50%{opacity:1} }
+
+.progress-outer {
+  width: 300px; height: 1px;
+  background: var(--c-dim); margin: 0 auto 16px;
+}
+#prog-bar { height:100%; width:0%; background: var(--c); transition: width 0.8s linear; }
+
+#timer { font-size: 11px; opacity: 0.4; letter-spacing: 3px; }
+
+.sync-grid {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 20px; width: 320px; margin-top: 50px;
+  font-size: 10px; opacity: 0.35; text-align:left;
+}
+.sync-row { display: flex; flex-direction: column; gap: 4px; }
+.sync-key { letter-spacing: 2px; opacity: 0.6; }
+.sync-val { color: var(--amber); }
+
+/* ─── PHASE 3: OBSERVE ─── */
+#phase-observe { z-index: 10; pointer-events: none; }
+
+/* HUD elements */
+.hud {
+  position: fixed; font-size: 10px;
+  letter-spacing: 2px; opacity: 0;
+  transition: opacity 2s;
+  line-height: 1.8;
+  pointer-events: none;
+}
+.hud.show { opacity: 0.55; }
+
+#hud-tl { top: 28px; left: 28px; }
+#hud-tr { top: 28px; right: 28px; text-align: right; }
+#hud-bl { bottom: 28px; left: 28px; }
+#hud-br { bottom: 28px; right: 28px; text-align: right; }
+
+.hud-sep { color: var(--c-mid); }
+
+#coh-bar-wrap {
+  width: 100px; height: 1px;
+  background: var(--c-dim); margin: 4px 0;
+  display: inline-block; vertical-align: middle;
+}
+#coh-bar { height:100%; width:0%; background:var(--c); }
+
+/* ─── HOLD INSTRUCTION ─── */
+#hold-ring {
+  position: fixed;
+  bottom: 60px; left: 50%; transform: translateX(-50%);
+  text-align: center;
+  opacity: 0; transition: opacity 1.5s;
+  pointer-events: none;
+  z-index: 20;
+}
+#hold-ring.show { opacity:1; }
+
+.ring-outer {
+  width: 64px; height: 64px;
+  border: 1px solid var(--c-mid);
+  border-radius: 50%;
+  margin: 0 auto 14px;
+  display: flex; align-items: center; justify-content: center;
+  position: relative;
+}
+.ring-inner {
+  width: 40px; height: 40px;
+  border: 1px solid var(--c);
+  border-radius: 50%;
+  transition: all 0.3s;
+}
+.ring-outer svg {
+  position:absolute; inset:-1px;
+  transform: rotate(-90deg);
+}
+#ring-progress {
+  stroke: var(--c);
+  stroke-dasharray: 201; stroke-dashoffset: 201;
+  transition: stroke-dashoffset 0.1s linear;
+  fill: none; stroke-width: 1;
+}
+
+.hold-label {
+  font-size: 9px; letter-spacing: 4px; opacity: 0.5;
+}
+
+/* ─── COLLAPSE (text reveal) ─── */
+#collapse-text {
+  position: fixed; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  z-index: 30; pointer-events: none;
+  opacity: 0; transition: opacity 0.5s;
+}
+#collapse-text.show { opacity: 1; }
+
+.collapse-inner {
+  max-width: 420px; padding: 0 40px;
+  text-align: center;
+  font-size: 15px; line-height: 2;
+  color: #e0fff8;
+  text-shadow: 0 0 30px rgba(0,255,204,0.9), 0 0 60px rgba(0,229,176,0.4);
+}
+
+#obs-complete {
+  position: fixed; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  z-index: 35; pointer-events: none;
+  opacity: 0; transition: opacity 0.6s;
+}
+#obs-complete.show { opacity: 1; }
+.obs-complete-inner {
+  text-align: center;
+  font-size: 11px; letter-spacing: 6px;
+  color: var(--c); opacity: 0.7;
+}
+
+
+</style>
 </head>
 <body>
 
-<div id="screen-container">
-    <!-- 階段 1：輸入 -->
-    <div id="input-overlay">
-        <div class="terminal-label">S-201 投射：輸入欲追蹤之意識路徑</div>
-        <input type="text" id="user-input" placeholder="..." autocomplete="off">
-        <br>
-        <button onclick="startSync()">啟動觀測儀式</button>
-    </div>
+<div id="fx"></div>
+<div id="screen">
 
-    <!-- 階段 2：等待 1 分鐘 -->
-    <div id="sync-overlay">
-        <div class="terminal-label" id="sync-status">正在計算次維度相干性...</div>
-        <div class="progress-container"><div id="progress-bar"></div></div>
-        <div id="timer-display" style="font-size: 12px; opacity: 0.6;">00:60</div>
-    </div>
+<canvas id="c"></canvas>
 
-    <!-- 階段 3：觀測介面 -->
-    <div id="system-log" class="ui-element">
-        TERMINAL: S-201 // OBSERVATION RIFT<br>
-        DATA_STREAM: ACTIVE<br>
-        ENCRYPTION: QUANTUM_FLUX<br>
-        <span id="status-text">IDLE</span>
-    </div>
+<!-- PHASE 1 -->
+<div class="phase" id="phase-input">
+  <div class="terminal-header">
+    <span class="typewriter" style="animation-delay:0.2s">時空觀測處 // SPACETIME OBSERVATION BUREAU</span>
+    <span style="opacity:0.3; animation: type 1s 1.5s both; overflow:hidden; white-space:nowrap; display:block">TERMINAL S-201 — OBSERVATION RIFT v4.2.1</span>
+  </div>
 
-    <div id="coherence-panel" class="ui-element">
-        COHERENCE<br>
-        <div style="width:120px; height:2px; background:rgba(0,255,204,0.1); margin: 5px 0;">
-            <div id="coherence-bar" style="width:0%; height:100%; background:var(--primary-color);"></div>
-        </div>
-        <span id="coherence-pct">0.00%</span>
-    </div>
-
-    <canvas id="observationCanvas"></canvas>
-
-    <div id="instruction" class="ui-element" style="bottom: 40px; width:100%; text-align:center; letter-spacing: 4px;">
-        [ 長按螢幕以固定坍縮態 ]
-    </div>
+  <div class="input-wrap">
+    <div class="input-label">[ 投射意識路徑 — 輸入那個未選擇的瞬間 ]</div>
+    <input type="text" id="user-input" placeholder="如果當年我沒有…" autocomplete="off" spellcheck="false">
+  </div>
+  <div class="hint">量子相干性將於輸入後開始衰減</div>
+  <button class="btn-start" onclick="startSync()">啟動觀測儀式</button>
 </div>
 
+<!-- PHASE 2 -->
+<div class="phase hidden" id="phase-sync">
+  <div class="sync-title">[ 正在建立次維度連結 ]</div>
+  <div id="sync-msg">正在計算機率幅...</div>
+  <div class="progress-outer"><div id="prog-bar"></div></div>
+  <div id="timer">00:60</div>
+  </div>
+</div>
+
+<!-- PHASE 3 HUD -->
+<div class="hud" id="hud-tl">
+  TERMINAL: S-201<br>
+  STREAM: <span id="stream-status">IDLE</span><br>
+  ENC: QUANTUM_FLUX
+</div>
+<div class="hud" id="hud-tr">
+  COHERENCE<br>
+  <span id="coh-bar-wrap"><span id="coh-bar"></span></span><br>
+  <span id="coh-pct">0.00%</span>
+</div>
+<div class="hud" id="hud-bl">
+  宇宙 #<span id="uni-display">——</span><br>
+  路徑偏差: <span id="div-display">——</span>
+</div>
+<div class="hud" id="hud-br">
+  <span id="obs-state">疊加態</span><br>
+  坍縮指數: <span id="collapse-idx">0.000</span>
+</div>
+
+<!-- Hold ring -->
+<div id="hold-ring">
+  <div class="ring-outer">
+    <svg width="66" height="66" viewBox="0 0 66 66">
+      <circle id="ring-progress" cx="33" cy="33" r="32" />
+    </svg>
+    <div class="ring-inner"></div>
+  </div>
+  <div class="hold-label">長按以觀測</div>
+</div>
+
+<!-- Collapse text reveal -->
+<div id="collapse-text">
+  <div class="collapse-inner" id="collapse-inner"></div>
+</div>
+
+<!-- 觀測完畢 -->
+<div id="obs-complete">
+  <div class="obs-complete-inner">— 觀測完畢 —<br><span style="font-size:9px; letter-spacing:3px; opacity:0.5">波函數已坍縮</span></div>
+</div>
+
+
+
+</div><!-- #screen -->
+
 <script>
-    const canvas = document.getElementById('observationCanvas');
-    const ctx = canvas.getContext('2d');
-    let width, height, particles = [];
-    let isObserving = false;
-    let isReadyToObserve = false;
-    let coherence = 0;
-    let targetMsg = "";
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+let W, H, particles = [];
+let isObserving = false;
+let isReady = false;
+let coherence = 0;
+let collapseProgress = 0;
+let generatedText = '';
+let revealedChars = 0;
+let phase = 1; // 1=input, 2=sync, 3=observe
+let universeId = '';
+let divStr = '';
+let holdDuration = 0;
+let holdInterval = null;
+let collapseTriggered = false;
 
-    function resize() {
-        width = window.innerWidth;
-        height = window.innerHeight;
-        canvas.width = width;
-        canvas.height = height;
+function resize() {
+  W = canvas.width = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ─── PARTICLE SYSTEM ───
+class P {
+  constructor() { this.reset(); }
+  reset() {
+    this.x = Math.random() * W;
+    this.y = Math.random() * H;
+    this.tx = this.x; this.ty = this.y;
+    this.vx = (Math.random() - 0.5) * 0.6;
+    this.vy = (Math.random() - 0.5) * 0.6;
+    this.sz = Math.random() * 1.2 + 0.3;
+    this.life = Math.random();
+  }
+  update() {
+    if (collapseTriggered) return; // freeze during reveal
+    this.x += this.vx;
+    this.y += this.vy;
+    if (this.x < 0 || this.x > W) this.vx *= -1;
+    if (this.y < 0 || this.y > H) this.vy *= -1;
+  }
+  draw() {
+    const a = collapseTriggered ? 0.1 : (isObserving ? 0.55 : 0.18);
+    ctx.fillStyle = `rgba(0,229,176,${a})`;
+    ctx.fillRect(this.x, this.y, this.sz, this.sz);
+  }
+}
+
+for (let i = 0; i < 5000; i++) particles.push(new P());
+
+// ─── TEXT → PARTICLES ───
+function prepareText(msg) {
+  const tmp = document.createElement('canvas');
+  tmp.width = W; tmp.height = H;
+  const tc = tmp.getContext('2d');
+  tc.fillStyle = '#fff';
+
+  // Responsive font size
+  const fz = Math.min(22, W / 22);
+  tc.font = `300 ${fz}px 'Noto Sans TC', sans-serif`;
+  tc.textAlign = 'center';
+
+  // Word wrap
+  const maxW = Math.min(420, W * 0.75);
+  const words = msg.split('');
+  const lines = [];
+  let line = '';
+  for (let ch of words) {
+    const test = line + ch;
+    if (tc.measureText(test).width > maxW && line.length > 0) {
+      lines.push(line); line = ch;
+    } else { line = test; }
+  }
+  if (line) lines.push(line);
+
+  const lineH = fz * 1.8;
+  const startY = H/2 - (lines.length - 1) * lineH / 2;
+  lines.forEach((l, i) => tc.fillText(l, W/2, startY + i * lineH));
+
+  const data = tc.getImageData(0, 0, W, H).data;
+  const pts = [];
+  for (let i = 0; i < H; i += 3) {
+    for (let j = 0; j < W; j += 3) {
+      if (data[(i * W + j) * 4] > 100) pts.push({x: j, y: i});
     }
-    window.addEventListener('resize', resize);
-    resize();
+  }
+  pts.sort(() => Math.random() - 0.5);
 
-    class Particle {
-        constructor() {
-            this.init();
-        }
-        init() {
-            this.x = Math.random() * width;
-            this.y = Math.random() * height;
-            this.tx = this.x; this.ty = this.y;
-            // 速度變慢，增加黏滯感
-            this.vx = (Math.random() - 0.5) * 0.8;
-            this.vy = (Math.random() - 0.5) * 0.8;
-            this.size = Math.random() * 1.5 + 0.5;
-        }
-        update() {
-            if (isObserving && isReadyToObserve) {
-                // 凝聚過程變慢但更精確 (lerp factor 降低)
-                this.x += (this.tx - this.x) * 0.04;
-                this.y += (this.ty - this.y) * 0.04;
-            } else {
-                this.x += this.vx;
-                this.y += this.vy;
-                if (this.x < 0 || this.x > width) this.vx *= -1;
-                if (this.y < 0 || this.y > height) this.vy *= -1;
-            }
-        }
-        draw() {
-            // 觀測時亮度增加
-            const alpha = isObserving ? 0.9 : 0.2;
-            ctx.fillStyle = `rgba(0, 255, 204, ${alpha})`;
-            ctx.fillRect(this.x, this.y, this.size, this.size);
-        }
+  particles.forEach((p, idx) => {
+    if (idx < pts.length) {
+      p.tx = pts[idx].x; p.ty = pts[idx].y;
+    } else {
+      p.tx = W/2 + (Math.random()-0.5) * 500;
+      p.ty = H/2 + (Math.random()-0.5) * 300;
     }
+  });
+}
 
-    // 增加粒子數量以提高文字清晰度
-    for (let i = 0; i < 4000; i++) particles.push(new Particle());
+// ─── ANIMATION LOOP ───
+function animate() {
+  ctx.fillStyle = phase === 3
+    ? (isObserving ? 'rgba(3,8,8,0.12)' : 'rgba(3,8,8,0.25)')
+    : 'rgba(3,8,8,0.4)';
+  ctx.fillRect(0, 0, W, H);
 
-    function startSync() {
-        const input = document.getElementById('user-input').value;
-        if (!input) return;
-
-        targetMsg = `「${input}」不好`;
-        
-        document.getElementById('input-overlay').classList.add('hidden');
-        
-        // 進入 60 秒倒數
-        setTimeout(() => {
-            document.getElementById('sync-overlay').style.display = 'block';
-            let timeLeft = 60;
-            const timerInterval = setInterval(() => {
-                timeLeft--;
-                const progress = ((60 - timeLeft) / 60) * 100;
-                document.getElementById('progress-bar').style.width = progress + '%';
-                document.getElementById('timer-display').innerText = `00:${timeLeft < 10 ? '0' + timeLeft : timeLeft}`;
-                
-                // 隨機切換掃描狀態字樣
-                const statuses = ["正在校準機率幅...", "搜索次維度特徵...", "鎖定反事實殘影...", "量子去相干補償中..."];
-                if (timeLeft % 5 === 0) {
-                    document.getElementById('sync-status').innerText = statuses[Math.floor(Math.random()*statuses.length)];
-                }
-
-                if (timeLeft <= 0) {
-                    clearInterval(timerInterval);
-                    enterObservationMode();
-                }
-            }, 1000);
-        }, 1000);
-    }
-
-    function enterObservationMode() {
-        document.getElementById('sync-overlay').classList.add('hidden');
-        prepareText(targetMsg);
-        
-        setTimeout(() => {
-            document.querySelectorAll('.ui-element').forEach(el => el.classList.add('active-ui'));
-            isReadyToObserve = true;
-            document.getElementById('status-text').innerText = "SYNCHRONIZED";
-        }, 1500);
-    }
-
-    function prepareText(msg) {
-        // 在隱藏的緩衝區畫圖以獲取更高精度的點
-        ctx.clearRect(0,0,width,height);
-        ctx.fillStyle = "white";
-        // 增加字體大小並使用更重一點的粗細
-        ctx.font = "bold 26px 'Microsoft JhengHei', sans-serif";
-        ctx.textAlign = "center";
-        
-        // 簡單的文字換行邏輯
-        const words = msg.split('');
-        let line = '';
-        let y = height / 2 - 20;
-        for(let n = 0; n < words.length; n++) {
-            line += words[n];
-            if (line.length > 15) {
-                ctx.fillText(line, width/2, y);
-                line = '';
-                y += 40;
-            }
-        }
-        ctx.fillText(line, width/2, y);
-
-        const imageData = ctx.getImageData(0, 0, width, height).data;
-        let points = [];
-        // 縮小採樣間距 (從 4 降到 2 或 3) 提高清晰度
-        for (let i = 0; i < height; i += 3) {
-            for (let j = 0; j < width; j += 3) {
-                if (imageData[(i * width + j) * 4] > 128) {
-                    points.push({x: j, y: i});
-                }
-            }
-        }
-
-        // 打亂點的順序讓凝聚效果更自然
-        points.sort(() => Math.random() - 0.5);
-
-        particles.forEach((p, idx) => {
-            if (idx < points.length) {
-                p.tx = points[idx].x;
-                p.ty = points[idx].y;
-            } else {
-                // 多餘粒子隨機分佈在文字周圍形成光暈
-                p.tx = width/2 + (Math.random()-0.5)*400;
-                p.ty = height/2 + (Math.random()-0.5)*200;
-            }
-        });
+  if (phase === 3) {
+    if (isObserving && isReady) {
+      coherence = Math.min(coherence + 0.15, 42 + Math.random() * 3);
+    } else if (isReady) {
+      coherence = Math.max(coherence - 0.5, 0);
     }
 
-    function animate() {
-        // 增加殘影效果
-        ctx.fillStyle = 'rgba(5, 10, 10, 0.15)';
-        ctx.fillRect(0, 0, width, height);
+    const ci = collapseTriggered ? 1 : (coherence / 45).toFixed(3);
+    document.getElementById('coh-bar').style.width = (coherence / 45 * 100) + '%';
+    document.getElementById('coh-pct').innerText = coherence.toFixed(2) + '%';
+    document.getElementById('collapse-idx').innerText = parseFloat(ci).toFixed(3);
 
-        if (isObserving && isReadyToObserve) {
-            coherence = Math.min(coherence + 0.2, 42.15 + Math.random() * 0.5);
-            document.getElementById('status-text').innerText = "COLLAPSING...";
-        } else if (isReadyToObserve) {
-            coherence = Math.max(coherence - 1, 0);
-            document.getElementById('status-text').innerText = "STABLE NOISE";
-        }
-
-        document.getElementById('coherence-bar').style.width = coherence + "%";
-        document.getElementById('coherence-pct').innerText = coherence.toFixed(2) + "%";
-
-        particles.forEach(p => {
-            p.update();
-            p.draw();
-        });
-
-        requestAnimationFrame(animate);
+    if (isObserving) {
+      document.getElementById('stream-status').innerText = 'COLLAPSING';
+      document.getElementById('obs-state').innerText = '坍縮中';
+    } else {
+      document.getElementById('stream-status').innerText = isReady ? 'SYNCHRONIZED' : 'IDLE';
+      document.getElementById('obs-state').innerText = isReady ? '疊加態' : '待機';
     }
+  }
 
-    const startObs = () => { if(isReadyToObserve) isObserving = true; };
-    const endObs = () => isObserving = false;
+  particles.forEach(p => { p.update(); p.draw(); });
+  requestAnimationFrame(animate);
+}
+animate();
 
-    window.addEventListener('mousedown', startObs);
-    window.addEventListener('mouseup', endObs);
-    window.addEventListener('touchstart', (e) => { e.preventDefault(); startObs(); });
-    window.addEventListener('touchend', endObs);
+// ─── PHASE 1 ───
+let userQuery = '';
 
-    animate();
+function startSync() {
+  const inp = document.getElementById('user-input').value.trim();
+  if (!inp) {
+    document.getElementById('user-input').style.borderBottom = '1px solid #ff4444';
+    return;
+  }
+  userQuery = inp;
+  universeId = '#' + Math.floor(Math.random()*9000+1000) + '-' + String.fromCharCode(65+Math.floor(Math.random()*26));
+  divStr = (Math.random()*8 + 1).toFixed(4) + ' σ';
+
+  document.getElementById('phase-input').classList.add('hidden');
+  document.getElementById('universe-id').innerText = universeId;
+  document.getElementById('sync-div').innerText = divStr;
+
+  setTimeout(() => {
+    document.getElementById('phase-sync').classList.remove('hidden');
+    startSyncTimer();
+    // Start generating AI text immediately in background
+    generateCounterfactual(userQuery);
+  }, 800);
+}
+
+// ─── PHASE 2: SYNC ───
+const syncMessages = [
+  '正在計算機率幅...',
+  '搜索次維度特徵...',
+  '鎖定反事實殘影...',
+  '量子去相干補償中...',
+  '解析平行時間線...',
+  '校準意識引力場...',
+  '捕捉坍縮路徑...',
+  '建立跨維度通道...',
+];
+
+function startSyncTimer() {
+  let t = 60;
+  const sigs = ['極微弱','微弱','不穩定','可偵測','穩定中'];
+  const iv = setInterval(() => {
+    t--;
+    const p = (60 - t) / 60;
+    document.getElementById('prog-bar').style.width = (p * 100) + '%';
+    document.getElementById('timer').innerText = `00:${t < 10 ? '0'+t : t}`;
+    document.getElementById('sync-coh').innerText = (p * 42.15).toFixed(2) + '%';
+    document.getElementById('sync-sig').innerText = sigs[Math.min(Math.floor(p * 5), 4)];
+    if (t % 6 === 0)
+      document.getElementById('sync-msg').innerText = syncMessages[Math.floor(Math.random() * syncMessages.length)];
+    if (t <= 0) { clearInterval(iv); enterObserve(); }
+  }, 1000);
+}
+
+// ─── CLAUDE API ───
+let aiText = null;
+
+async function generateCounterfactual(query) {
+  try {
+    const systemPrompt = `你是「時空觀測處」S-201 終端機的核心語言模型。
+你的任務是：根據使用者輸入的「反事實假設」（那個沒有發生的可能性），
+生成來自「平行宇宙那個時空的自己」的一段訊息。
+
+規則：
+1. 訊息長度：30 到 80 個中文字，不多不少。
+2. 語氣：安靜、詩意、帶著輕微的哀愁或平靜。不要說教，不要邏輯分析。
+3. 內容：具體的生活細節（一個物件、一個場景、一個感官印象），而非抽象感受。
+4. 不要直接回答假設問題，而是給出那個平行宇宙生活的片段。
+5. 只輸出訊息本文，不要任何 JSON、標點說明或 markdown。`;
+
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 200,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: `反事實假設：「${query}」` }]
+      })
+    });
+    const data = await res.json();
+    aiText = data.content.map(b => b.text || '').join('').trim();
+  } catch(e) {
+    aiText = '窗外的光線以某種你不再熟悉的角度斜落。桌上有一杯還冒著熱氣的茶，你不記得是誰泡的了。';
+  }
+}
+
+// ─── PHASE 3: OBSERVE ───
+function enterObserve() {
+  document.getElementById('phase-sync').classList.add('hidden');
+  phase = 3;
+
+  // If AI text isn't ready yet, wait for it
+  const waitForText = () => {
+    if (aiText !== null) {
+      setupObserve();
+    } else {
+      setTimeout(waitForText, 300);
+    }
+  };
+  waitForText();
+}
+
+function setupObserve() {
+  document.getElementById('uni-display').innerText = universeId;
+  document.getElementById('div-display').innerText = divStr;
+
+  // Prepare particle text shape
+  prepareText(aiText);
+  generatedText = aiText;
+
+  setTimeout(() => {
+    document.querySelectorAll('.hud').forEach(el => el.classList.add('show'));
+    document.getElementById('hold-ring').classList.add('show');
+    isReady = true;
+  }, 1200);
+}
+
+// ─── HOLD TO OBSERVE ───
+let holdProg = 0;
+const HOLD_NEEDED = 3000; // 3 seconds to trigger collapse
+let holdStart = null;
+let revealInterval = null;
+let revealIdx = 0;
+let collapseFullyShown = false;
+
+function startHold() {
+  if (!isReady) return;
+  isObserving = true;
+  holdStart = Date.now();
+  holdInterval = requestAnimationFrame(updateHold);
+}
+
+function updateHold() {
+  if (!isObserving) { holdStart = null; return; }
+  holdProg = Math.min((Date.now() - holdStart) / HOLD_NEEDED, 1);
+  const dashOffset = 201 * (1 - holdProg);
+  document.getElementById('ring-progress').style.strokeDashoffset = dashOffset;
+
+  if (holdProg >= 1 && !collapseTriggered) {
+    startReveal();
+  }
+  holdInterval = requestAnimationFrame(updateHold);
+}
+
+function startReveal() {
+  if (collapseTriggered) return;
+  collapseTriggered = true;
+  document.getElementById('hold-ring').classList.remove('show');
+  document.getElementById('collapse-text').classList.add('show');
+  const colEl = document.getElementById('collapse-inner');
+  colEl.innerText = '';
+  revealIdx = 0;
+  collapseFullyShown = false;
+
+  revealInterval = setInterval(() => {
+    if (revealIdx <= generatedText.length) {
+      colEl.innerText = generatedText.slice(0, revealIdx);
+      revealIdx++;
+      if (revealIdx > generatedText.length) collapseFullyShown = true;
+    }
+  }, 55);
+}
+
+function endHold() {
+  isObserving = false;
+  holdProg = 0;
+  document.getElementById('ring-progress').style.strokeDashoffset = 201;
+  if (holdInterval) cancelAnimationFrame(holdInterval);
+
+  if (collapseTriggered) {
+    // Release while text is shown → collapse everything
+    collapseAll();
+  }
+}
+
+function collapseAll() {
+  if (revealInterval) { clearInterval(revealInterval); revealInterval = null; }
+  document.getElementById('collapse-text').classList.remove('show');
+
+  const done = document.getElementById('obs-complete');
+  done.classList.add('show');
+
+  setTimeout(() => {
+    done.classList.remove('show');
+    setTimeout(() => {
+      // Full reset back to input
+      collapseTriggered = false;
+      collapseFullyShown = false;
+      revealIdx = 0;
+      isReady = false;
+      coherence = 0;
+      aiText = null;
+      phase = 1;
+      document.getElementById('collapse-inner').innerText = '';
+      document.querySelectorAll('.hud').forEach(el => el.classList.remove('show'));
+      document.getElementById('hold-ring').classList.remove('show');
+      document.getElementById('ring-progress').style.strokeDashoffset = 201;
+      particles.forEach(p => p.reset());
+      document.getElementById('user-input').value = '';
+      document.getElementById('prog-bar').style.width = '0%';
+      document.getElementById('timer').innerText = '00:60';
+      document.getElementById('phase-input').classList.remove('hidden');
+    }, 800);
+  }, 2000);
+}
+
+// ─── INPUT EVENTS ───
+window.addEventListener('mousedown', startHold);
+window.addEventListener('mouseup', endHold);
+window.addEventListener('touchstart', (e) => { e.preventDefault(); startHold(); }, {passive:false});
+window.addEventListener('touchend', endHold);
+
+// Enter key on input
+document.getElementById('user-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') startSync();
+});
 </script>
-
 </body>
 </html>
